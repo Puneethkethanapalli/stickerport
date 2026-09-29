@@ -10,10 +10,11 @@
 **Current position** _(update at the end of every session)_
 
 - **Current sprint:** Sprint 0
-- **Next task to do:** `T0.3`
-- **Tasks done:** 2 / 66
+- **Next task to do:** `T1.1` (Sprint 1)
+- **Tasks done:** 5 / 66 — **Sprint 0 complete**
 - **Blocked on:** nothing
-- **Last session:** 2026-09-29 — T0.2 done (Material 3 theme, edge-to-edge, predictive back; verified light+dark on API 26 and a real API 36 phone)
+- **Last session:** 2026-09-30 — T0.3, T0.4, T0.5 done. Sprint 0 gate met: CI green, APK launches.
+  16 JVM unit tests + 21 instrumented tests, all green on the physical OnePlus (API 36).
 
 **This machine's toolchain** _(set up in T0.1; reuse it, don't rediscover it)_
 
@@ -29,13 +30,22 @@ resolves to 21.0.2 (pinned by `.mise.toml`) in any shell, and the git-ignored `l
   `platforms/android-37.2`, `build-tools/36.0.0`, `build-tools/37.0.0`,
   `ndk/28.2.13676358` (r28c), `emulator`, AVD `sp_api26` (API 26, google_apis x86_64).
   `/dev/kvm` is present, so the emulator runs at full speed.
-- **Real phone (USB, always attached):** OnePlus **CPH2691**, **Android 16 / API 36**, `arm64-v8a`,
-  1264×2780 @ 560 dpi, serial **`19eb9d18`**, not a low-RAM device. This is the primary manual-QA
-  device and it covers the "API 34+" half of T0.2's matrix by itself; `sp_api26` covers the
-  minSdk end. Re-check the serial with `adb devices -l` — it changes if the phone is re-paired.
-- **Both are attached at once.** `./gradlew installDebug` installs to *all* connected devices
-  (`Installed on 2 devices.`) rather than erroring. Target one with `adb -s <serial> …`, or set
-  `ANDROID_SERIAL=19eb9d18` for Gradle tasks.
+- **Real phone (USB):** OnePlus **CPH2691**, **Android 16 / API 36**, `arm64-v8a`, 1264×2780 @ 560 dpi,
+  serial **`19eb9d18`**, not a low-RAM device. This is the primary manual-QA device and it carries
+  the instrumented suite: `ANDROID_SERIAL=19eb9d18 ./gradlew :app:connectedDebugAndroidTest`.
+  Re-check the serial with `adb devices -l` — it changes if the phone is re-paired. **Do not use the
+  emulator for this suite** (see the two gotchas below); `sp_api26` (API 26) is for the minSdk end of
+  the manual matrix only.
+- **Before any instrumented run on the phone**, do both of these:
+  ```bash
+  adb -s 19eb9d18 shell settings put system screen_off_timeout 1800000   # default 5 min < suite
+  adb -s 19eb9d18 shell settings put global stay_on_while_plugged_in 3
+  ```
+  and **uninstall the app first** — `connectedAndroidTest` fails with `INSTALL_FAILED_ALREADY_EXISTS`
+  if a previous `installDebug` left an APK behind, and then reports BUILD SUCCESSFUL anyway.
+- The emulator (`sp_api26`) is **not** always running. Start it with
+  `~/Android/Sdk/emulator/emulator -avd sp_api26 -no-snapshot-load -no-boot-anim &`, then wait for
+  `adb -s emulator-5554 shell getprop sys.boot_completed` to print `1` (about 30 s).
 - Only needed when re-provisioning the SDK:
   `export PATH="$HOME/Android/Sdk/cmdline-tools/latest/bin:$PATH"` for `sdkmanager` / `avdmanager`.
 
@@ -107,6 +117,13 @@ _Newest first. One line each, with the task ID._
 - ➕ **(T0.2) The Compose compiler plugin is still required under AGP 9 built-in Kotlin** — `alias(libs.plugins.kotlin.compose)` + `buildFeatures { compose = true }`.
 - ➕ **(T0.2) Context7 answers Compose questions with the *Views/Fragments* API.** Asked twice and got `DynamicColors` (Views) and `OnBackStackChangedListener` (Fragments) instead of the Compose KTX equivalents. Use developer.android.com + the compiler.
 - ➕ **(T0.2) `adb exec-out screencap` can come back rotated** if the device has auto-rotate on. Not a layout bug — check `settings get system accelerometer_rotation` before debugging the app.
+- ➕ **(T0.5) `useJUnitPlatform()` does NOT run JUnit 4 tests, and "zero tests discovered" is not a failure — the build goes green.** Measured: 16 unit tests with `junit-vintage-engine`, 9 without. Every Robolectric and Compose-UI-rule test vanishes silently. This is the most dangerous line in the build; check it first whenever tests "disappear".
+- ➕ **(T0.4) Before any instrumented run on a physical device, set `screen_off_timeout` high.** The default 5 min is shorter than the suite, the screen sleeps mid-run, and it surfaces as "No compose hierarchies found in the app" — which reads like a Compose bug.
+- ➕ **(T0.3/T0.4) `connectedAndroidTest` can report BUILD SUCCESSFUL while failing to install.** Read `app/build/outputs/androidTest-results/**/*.xml`; never trust the exit code. It also needs the app uninstalled first (`INSTALL_FAILED_ALREADY_EXISTS`).
+- ➕ **(T0.4) KSP 2.3.12 + Kotlin 2.4.20 + Hilt 2.60.1 + Room 2.8.5 work together under AGP 9 built-in Kotlin.** The risk this plan carried since T0.1 is now closed by evidence, not assumption.
+- ➕ **(T0.3) Type-safe routes need the `kotlin-serialization` plugin *and* `kotlinx-serialization-json` on the runtime classpath.** And `NavOptionsBuilder` members are properties: `launchSingleTop = true`, not `launchSingleTop()`.
+- ➕ **(T0.4) Room 2.x's plugin id is `androidx.room`; Room 3.x is `androidx.room3`.** Not interchangeable — do not bump the `room` version without changing the id.
+- ➕ **(T0.3) The Compose BOM must be on every configuration** that resolves a Compose artifact: `implementation`, `debug`, `androidTest`, `test`. Each has its own classpath; an un-versioned alias there fails with an empty version string.
 
 - ➕ **(T0.1) The two repo docs are named the opposite way to what this file's header claimed.** `plan.md` *is* this agile plan; the product spec v0.2 is **`spec.md`**. Every `§x` / `FR-x` / `NFR-x` / `Appendix` ref in this file points into `spec.md`. Header corrected in T0.1.
 - ➕ **(T0.1) No system JDK, no Android SDK and no passwordless sudo on this machine.** Install the JDK with `mise install java@21` (`~/.local/share/mise/installs/java/21.0.2`) and the SDK user-locally into `~/Android/Sdk` from Google's `commandlinetools` zip. `pacman` needs a password.
@@ -129,7 +146,7 @@ _Newest first. One line each, with the task ID._
 
 | Sprint | Milestone | Focus | Tasks | Done |
 |---|---|---|---|---|
-| [ ] Sprint 0 | M0 | Project skeleton | T0.1–T0.5 | 2/5 |
+| [x] Sprint 0 | M0 | Project skeleton | T0.1–T0.5 | **5/5** ✅ |
 | [ ] Sprint 1 | M1a | Link parsing, Telegram client, token store | T1.1–T1.5 | 0/5 |
 | [ ] Sprint 2 | M1b | Native WebP + static conversion + validator | T2.1–T2.6 | 0/6 |
 | [ ] Sprint 3 | M1c | Chunking, ContentProvider, WhatsApp handoff | T3.1–T3.6 | 0/6 |
@@ -327,65 +344,242 @@ Build: `./gradlew clean assembleDebug assembleRelease test lint` → **BUILD SUC
 - ➕ **Jumper:** JUnit is now **6.1.3** (was 5.14.1). T0.5 must confirm `useJUnitPlatform()` and the
   JUnit Platform launcher version line up on Gradle 9.8.
 
-### [ ] T0.3 — Navigation skeleton
+### [x] T0.3 — Navigation skeleton
 **Refs:** §6, §7.2, §12 · **Context7:** Navigation Compose (type-safe routes), kotlinx.serialization · **Depends on:** T0.2
 
 **Goal of the task:** Type-safe routes and placeholder screens for Home, Preview, Progress, Result, Library, Settings, Onboarding.
 
 **Steps**
-- [ ] `@Serializable` route objects/classes (Preview takes a set name, Result takes an import id)
-- [ ] `NavHost` with placeholder composables in `ui/screens/<name>/`
-- [ ] Home → Settings and Home → Library working
+- [x] `@Serializable` route objects/classes (Preview takes a set name, Result takes an import id)
+- [x] `NavHost` with placeholder composables in `ui/screens/<name>/`
+- [x] Home → Settings and Home → Library working
 
 **How to test:** Manual navigation through every route; instrumented test that each route composes without crashing.
 
+**Actual result:** 9 instrumented tests, all routes verified **twice** — by hand on the physical
+OnePlus (screenshots + `uiautomator dump` confirming each route's title *and* its arguments arrived
+intact) and by an instrumented suite. `Preview(setName)`, `Progress(importId)`,
+`Result(importId)`, `PackDetail(packId)` all round-trip.
+
+Added `PackDetail` beyond the seven listed: §12.4 requires it and route sets are cheap to extend
+now and expensive once real screens are wired. It lives in `screens/result/` because §7.2 has no
+directory for it and §12.4 makes it part of the Result flow.
+
+**Choices made:**
+- `data object` for argument-less routes rather than `enum class` — serializing an enum instance
+  leaks `name()` into the route pattern, so renaming the enum breaks deep links.
+- The top bar is derived from the destination via `hasRoute<T>()` type checks, not route-string
+  matching. String matching would hard-code the serializer-generated pattern
+  (`…ui.navigation.Preview/{setName}`) and break silently on any package or class rename.
+- `MainActivity.navController` is `internal` so the instrumented test can drive the **real** Activity
+  (whose `setContent` has already run) rather than installing its own content.
+- Home carries a labelled `SKELETON` section of temporary route links: on a fresh install there is
+  no Room row and no link to produce arguments with, so without them four of eight routes were
+  reachable only from code — and "navigate every route by hand" is this task's own acceptance test.
+
 **Mistakes made during the task:**
-- _None recorded yet._
+- Used `LibraryBooks` from `material-icons-extended` without checking it was in the core set, then
+  also added two redundant Library actions. Dropped `material-icons-extended` entirely (several MB
+  for a skeleton) and used core icons.
+- Wrote `navigate(Library) { launchSingleTop() }`. `NavOptionsBuilder` exposes `launchSingleTop` as
+  a **property**, not a function. Found by reading the decompiled AAR rather than guessing.
+- Added a bogus `import app.stickerport.ui.screens.packdetailPreviewHack` and a KDoc referencing a
+  `ChildOptions` class I never wrote. Both caught on re-read before compiling.
+- Two tests failed for reasons that had nothing to do with the app: top-bar actions are icon buttons
+  carrying a `contentDescription`, so `onNodeWithText("Settings")` finds nothing; and my exact-match
+  on a whole empty-state sentence broke the moment the copy is edited. Both are now
+  `onNodeWithContentDescription` / `substring = true`.
+- Assumed the Compose BOM only needed to be on `implementation`. `androidTest` has its own
+  classpath, so `ui-test-junit4` resolved to an **empty version**:
+  "Could not find androidx.compose.ui:ui-test-junit4:." Now added to implementation, androidTest,
+  debug **and** test.
 
 **Things to remember for future tasks:**
 - 📌 Package layout is fixed in §7.2; keep to it.
-- ➕ _Add lessons after finishing._
+- ➕ **The Compose BOM must be added to *every* configuration that resolves a Compose artifact** —
+  `implementation`, `debugImplementation`, `androidTestImplementation`, `testImplementation`. Each
+  has its own classpath and an un-versioned alias fails there with an empty version string.
+- ➕ **`material-icons-core` is not pulled in by `material3`.** `androidx.compose.material.icons.Icons`
+  needs it declared. Only ~30 icons; `material-icons-extended` is several MB and was rejected.
+- ➕ **`NavOptionsBuilder` members are properties**: `launchSingleTop = true`, not `launchSingleTop()`.
+- ➕ **Type-safe routes need the `kotlin-serialization` plugin *and* `kotlinx-serialization-json` on
+  the runtime classpath**, not just the plugin.
+- ➕ **Use `NavDestination.hasRoute<T>()` for per-destination styling.** Never match the route
+  string; it is serializer-generated and breaks on any rename.
+- ➕ **Instrumented tests need the app *uninstalled* first.** `connectedAndroidTest` fails with
+  `INSTALL_FAILED_ALREADY_EXISTS` if a previous `installDebug` left an APK behind — and the task
+  then reports **BUILD SUCCESSFUL** despite the failure. Read the XML in
+  `app/build/outputs/androidTest-results/`, never the exit code.
+- ➕ **`createComposeRule()` hosts a bare `ComponentActivity` with no Hilt component.** Once any
+  screen uses `hiltViewModel()`, tests must use `createAndroidComposeRule<MainActivity>()` and the
+  real Activity already called `setContent`, so the test must **not** call it. Also put
+  `HiltAndroidRule` at `@get:Rule(order = 0)` or it runs after the Activity launches.
 
-### [ ] T0.4 — DI, Room, and DataStore skeleton
+### [x] T0.4 — DI, Room, and DataStore skeleton
 **Refs:** §6, §11 · **Context7:** Hilt, Room, DataStore · **Depends on:** T0.1
 
 **Goal of the task:** Hilt wired up; Room database with the three entities from §11 (empty DAOs OK); DataStore instance for settings.
 
 **Steps**
-- [ ] Hilt application class, modules for DB and DataStore
-- [ ] `ImportEntity`, `StickerEntity`, `PackEntity` with enums (STATIC|TGS|WEBM, statuses)
-- [ ] Room schema export on; first migration strategy noted
-- [ ] `SettingsRepository` stub over DataStore
+- [x] Hilt application class, modules for DB and DataStore
+- [x] `ImportEntity`, `StickerEntity`, `PackEntity` with enums (STATIC|TGS|WEBM, statuses)
+- [x] Room schema export on; first migration strategy noted
+- [x] `SettingsRepository` stub over DataStore
 
 **How to test:** Room in-memory instrumented test inserts and reads one row per entity; app launches with Hilt without crashing.
 
+**Actual result: the task's headline risk is closed — KSP 2.3.12 + Kotlin 2.4.20 + Hilt 2.60.1 +
+Room 2.8.5 compile and run together under AGP 9 built-in Kotlin.** 21 instrumented tests + 9 JVM
+unit tests green on the physical OnePlus; the app launches with Hilt and no crash.
+
+The generated `app/schemas/…/1.json` was **read and checked**, not assumed: enums stored as `TEXT`
+(names, not ordinals), `Sticker.importId` → `CASCADE`, `Sticker.packId` → `SET NULL`, and every
+foreign-key column indexed.
+
+**Choices made:**
+- **Enums stored by `name`, never `ordinal`.** An ordinal silently changes meaning the moment
+  anyone reorders the enum, and every existing row is reinterpreted with no error and no migration.
+  `everyEnumValueSurvivesARoundTrip` pins this.
+- `Sticker.packId` is `SET NULL`, not `CASCADE`. Deleting one pack must not delete its stickers —
+  the import still owns them and the user may re-chunk.
+- The bot token is **deliberately absent** from `SettingsRepository`: spec §6 requires
+  Keystore-encrypted storage, which DataStore Preferences cannot provide. It is T1.3's `TokenStore`.
+- `HomeViewModel` takes **no dependencies** and `hasBotToken` is hard-coded `false`. Deriving it from
+  an unrelated preference would make the skeleton lie about app state, and T1.2/T1.3 would inherit
+  the assumption. The class KDoc names exactly where those parameters land.
+- Migration policy written into `StickerportDatabase`'s KDoc: export schemas, never bump without a
+  `Migration` **and** a migration test, **never ship `fallbackToDestructiveMigration()`**.
+
 **Mistakes made during the task:**
-- _None recorded yet._
+- Hilt's documented fix for "cannot use a `@HiltAndroidApp` application" — declaring
+  `HiltTestApplication` in `src/androidTest/AndroidManifest.xml` — **does nothing here**: AGP's
+  generated instrumentation has `targetPackage="app.stickerport"`, so the app under test's manifest
+  decides. `@CustomTestApplication(HiltTestApplication::class)` is also wrong — that class is
+  `final`, so the generated subclass does not compile. Fixed with a `HiltTestRunner` overriding
+  `newApplication`.
+- Reached for `dagger.Lazy` to keep DataStore's file lock lazy. Hilt has **no built-in binding** for
+  it, and a hand-written `@Provides` is rejected outright: "@Provides methods must not return
+  framework types". `Provider<T>` passes that check and is the same mistake in a different wrapper.
+  The version that works is deferring the read inside `flow { }`.
+- That last one hid a real bug. With the obvious `dataStore.data.map { … }`, the file is opened in
+  a **property initialiser**, so a corrupt settings file threw from the *constructor* — where
+  nothing can catch it and no collector exists yet. The `flow { }` wrapper also puts store
+  acquisition inside `catch`'s reach.
+- Wrote an enum round-trip test that never actually set the status it asserted on. It failed for a
+  reason unrelated to Room — in the test I wrote specifically to catch that class of mistake.
+- Asserted persistence by opening a second DataStore over the same file. DataStore holds an
+  exclusive per-file lock and throws. Rewritten to assert what one store can actually prove, and
+  the KDoc says so rather than leaving a test that looks like persistence coverage.
+- `TestNavHostController` needs `androidx.test:runner` for `AndroidJUnitRunner`; not transitive.
+- Robolectric needs `testOptions { unitTests { isIncludeAndroidResources = true } }` for the merged
+  manifest, and the Compose UI rule needs its **own** `testImplementation` copy — `androidTest`
+  already has one, but that scope is separate.
 
 **Things to remember for future tasks:**
-- 📌 `ADDED` is a cache of the whitelist check, not a source of truth (§11).
-- 📌 Deleting an Import must cascade to Stickers and Packs (§11).
-- ➕ _Add lessons after finishing._
+- 📌 `ADDED` is a cache of the whitelist check, not a source of truth (§11). Never gate UI on it.
+- 📌 Deleting an Import cascades to Stickers and Packs (§11).
+- ➕ **`@Serializable` entities are the wrong tool for Room.** Room entities are plain data classes;
+  the *route* classes in `ui/navigation` are what carry `@Serializable`.
+- ➕ **Room 2.x's Gradle plugin id is `androidx.room`; Room 3.x moved to `androidx.room3`.** They are
+  not interchangeable — do not bump the `room` version without changing the plugin id. (Room 3.0.3
+  is stable as of this session; staying on 2.8.5 deliberately.)
+- ➕ **The Room plugin is what makes schema export incremental-safe.** Without it you need a
+  hand-rolled `RoomSchemaArgProvider` and the generated schemas are not declared task outputs.
+- ➕ **Every Room foreign-key column must be indexed** or Room warns and the query planner
+  table-scans. `onDelete` per column: `ImportEntity.id` → `CASCADE` on both children,
+  `PackEntity.id` → `SET NULL` on `StickerEntity.packId`.
+- ➕ **Foreign keys are OFF by default in SQLite.** Room enables them; the in-memory test asserts
+  `PRAGMA foreign_keys` is 1, because with them off the cascade tests pass for the wrong reason.
+- ➕ **DataStore holds an exclusive lock on its file.** Two instances over one file throws
+  "There are multiple DataStores active for the same file". A `Singleton` repository must not open
+  the file at construction.
+- ➕ **Defer DataStore reads into `flow { }`, not a property initialiser** — see the Mistakes entry.
+- ➕ **`connectedAndroidTest` failing to install reports BUILD SUCCESSFUL.** Always read
+  `app/build/outputs/androidTest-results/**/*.xml`.
+- ➕ **On a physical device, disable the screen timeout before instrumented runs**
+  (`settings put system screen_off_timeout 1800000`). At the default 5 min the screen sleeps
+  mid-suite and tests fail with "No compose hierarchies found in the app" — which reads like a
+  Compose bug, not a power-management one. This cost two false debugging rounds.
 
-### [ ] T0.5 — CI and quality gates
+### [x] T0.5 — CI and quality gates
 **Refs:** §16, §17 (M0) · **Context7:** JUnit5, MockK, Turbine, Kotest · **Depends on:** T0.1
 
 **Goal of the task:** CI builds and runs unit tests on every push; test libraries wired up.
 
 **Steps**
-- [ ] GitHub Actions workflow: build, unit tests, lint
-- [ ] Add JUnit5/Kotest, MockK, Turbine, Robolectric to the version catalog
-- [ ] One sample unit test per library proves the setup
+- [x] GitHub Actions workflow: build, unit tests, lint
+- [x] Add JUnit5/Kotest, MockK, Turbine, Robolectric to the version catalog
+- [x] One sample unit test per library proves the setup
 
 **How to test:** Push a branch; CI is green. Break a test on purpose; CI goes red.
 
+**Actual result:** All five libraries now have a test that genuinely exercises them. Robolectric was
+the gap — in the catalog since T0.1 with nothing behind it. `StickerportThemeTest` uses
+`@Config(sdk = [30])` vs `[34]` to reach **both** branches of the dynamic-colour fallback, which is
+unreachable on a plain JVM because `Build.VERSION.SDK_INT` is the host's.
+
+"Break a test on purpose" was done for real: tightening a contrast assertion made
+`checker tones stay low contrast` fail with the real measured gap (0.0597), then reverted.
+
+**The important find.** `useJUnitPlatform()` does **not** run JUnit 4 tests. The launcher it installs
+only knows the Jupiter engine, so every `@RunWith(AndroidJUnit4::class)` test — all Robolectric, all
+Compose UI-rule tests — was silently not discovered, and "zero tests ran" is not a failure, so the
+build stayed **green**. Measured directly: **16 unit tests with `junit-vintage-engine`, 9 without
+it.** Seven tests vanished with no red anywhere. Fixed with the Vintage engine plus
+`isFailOnNoMatchingTests` on unit test tasks; both lines are commented at length because their
+absence fails silently *in the direction that looks like success*.
+
+**Choices made:**
+- `StickerportThemeTest` asserts the checkerboard tones are distinct, not pure black/white, and under
+  0.08 apart in luminance. Deriving them from `colorScheme` later would read as a tidy-up and
+  silently change the backdrop converted sticker art sits on (§12.7).
+- CI asserts the build needs no env vars (`env -i HOME PATH ./gradlew --version`) rather than
+  assuming it. That property is what `local.properties` + the committed wrapper buys, and the next
+  person to add an env-var dependency would otherwise never notice.
+- The instrumented CI job is present but `if: false`. It is labelled as such: it needs a cached
+  emulator image and ~7 min/run, and enabling it blind from a laptop is not verification. **CI has
+  never been executed** — it is parse-checked only.
+
 **Mistakes made during the task:**
-- _None recorded yet._
+- Burned several rounds trying to build a navigation graph in a plain JVM test. The reified
+  `composable<T>` needs a `NavigatorProvider` from a live controller; you cannot synthesise one.
+  Deleted that test and wrote `StickerportThemeTest` instead, which is a better test — it pins a
+  real design decision instead of an API detail.
+- Wrote a `createComposeRule` helper that read a `CompositionLocal` but was not `@Composable`. Lint
+  then demanded an uppercase name for the `@Composable` function (`AssertTones`).
+- The screen-timeout mistake listed under T0.4 surfaced *here*: three nav tests failed with
+  "No compose hierarchies found in the app" on a run that had passed minutes earlier. It was the
+  device sleeping at the 5-minute mark, not Compose.
+- First chased that as an app bug and an APK that had been uninstalled, before checking
+  `screen_off_timeout`.
 
 **Things to remember for future tasks:**
-- ➕ _Add lessons after finishing._
+- ➕ **The single most dangerous line in the build.** Without `junit-vintage-engine`,
+  `useJUnitPlatform()` silently skips every JUnit 4 test and the build goes green. If Robolectric or
+  Compose UI tests ever "disappear", check this first.
+- ➕ **JUnit 5 on Gradle 9 needs `junit-platform-launcher` on `testRuntimeOnly`**, or nothing is
+  discovered and Gradle reports success.
+- ➕ **Robolectric needs `testOptions { unitTests { isIncludeAndroidResources = true } }`** and
+  > 512 MB heap for the test task; `@Config(sdk = […])` is how you reach SDK-gated branches.
+- ➕ **Compose UI test rules need a `testImplementation` copy for the JVM side** — the
+  `androidTest` dependency does not carry over.
+- ➕ **JUnit 4 `assertX` inside a Compose content lambda works; Kotest's `shouldBe` does not
+  resolve there.** Kept `org.junit.Assert` inside `setContent`.
+- ➕ **Set `screen_off_timeout` high before any instrumented run on a physical device.** The default
+  5 min is shorter than the suite.
+- ➕ **CI has never run.** Treat `.github/workflows/ci.yml` as unverified until the first green
+  push; the `if: false` on the instrumented job is a deliberate gap, not an oversight.
+- ➕ The AVD `sp_api26` (API 26) still covers the minSdk end of the matrix. The primary manual-QA
+  device remains the OnePlus CPH2691 (API 36).
 
-🧪 **Sprint 0 gate:** CI green, APK launches. → tick Sprint 0 in the dashboard.
+🧪 **Sprint 0 gate:** ✅ **MET** — 16 JVM unit tests + 21 instrumented tests green on the physical
+OnePlus (API 36); clean `assembleDebug assembleRelease test lint`; 0 lint errors; APK installs and
+launches with Hilt, no crash. Sprint 0 ticked in the dashboard.
+
+⚠️ **One honest caveat:** "CI green" is met *locally and by inspection* — the workflow file is
+parse-validated but has **never been executed**, and its instrumented job is `if: false`. The gate
+rests on the local run being green, not on a real CI run. Enabling the instrumented job needs a
+cached emulator image and should be the first thing tried on the first push.
 
 ---
 
@@ -1671,8 +1865,9 @@ Build: `./gradlew clean assembleDebug assembleRelease test lint` → **BUILD SUC
 | [ ] Foreground service on Android 14–16 | T6.4 | open |
 | [ ] Appendix A numbers unverified | T2.1 | open |
 | [ ] `security-crypto` deprecation | T1.3 | open |
-| [x] KSP 2.3.12 + Kotlin 2.4.20 + Hilt 2.60.1 compatibility | T0.4 | open — every version exists, but nothing has compiled them together yet |
-| [x] JUnit **6.1.3** (major bump adopted in T0.2 with no tests to validate it) | T0.5 | open — confirm `useJUnitPlatform()` + Platform launcher versions line up on Gradle 9.8 |
+| [x] KSP 2.3.12 + Kotlin 2.4.20 + Hilt 2.60.1 compatibility | T0.4 | ✅ **CLOSED** — verified compiling and running on-device |
+| [x] JUnit **6.1.3** (major bump adopted in T0.2 with no tests to validate it) | T0.5 | ✅ **CLOSED** — 9 Jupiter tests run; Vintage engine added for the JUnit 4 ones |
+| [x] CI has never executed; instrumented job is `if: false` | T0.5 | **open** — the workflow is parse-validated only. Enable the instrumented job on the first push |
 
 ## 7. Decisions log
 _Record decisions that change plan.md or this file (date, decision, reason)._
@@ -1689,9 +1884,18 @@ _Record decisions that change plan.md or this file (date, decision, reason)._
 | 2026-09-29 | `MainActivity` is a plain `ComponentActivity`, **not** AppCompat | The UI is 100 % Compose, so there are no platform widgets to theme. AppCompat would add a dependency and theme-mapping work for nothing. |
 | 2026-09-29 | Expose `LocalCheckerColors` / `LocalUsesDynamicColor` from the theme from the start | spec §12.7 needs a checkerboard behind transparent art, and that only works if the checker tones are *independent of* the dynamic surface colour. Retrofitting that after ten screens depend on the theme is expensive. |
 | 2026-09-29 | Bump JUnit 5.14.1 → **6.1.3** | Adopt a new major now rather than mid-project; T0.5 is the immediate consumer so any breakage surfaces inside Sprint 0. Logged as a risk. |
+| 2026-09-30 | Keep Room on **2.8.5** with plugin id `androidx.room`, do not move to 3.x | Room 3.0.3 is stable, but 2.8.5 is the version this plan pinned and is the widely-deployed line. The plugin id also changed (`androidx.room3`), so a version bump is not a one-line change. Revisit with the first real schema change. |
+| 2026-09-30 | Store every Room enum as its **`name`**, never an `ordinal` | An ordinal changes meaning the instant the enum is reordered, reinterpreting every existing row with no error and no migration. Pinned by a test. |
+| 2026-09-30 | `Sticker.packId` is `onDelete = SET_NULL`, not `CASCADE` | Deleting one pack must not delete its stickers — the import still owns them and the user may re-chunk. |
+| 2026-09-30 | The bot token is **not** in `SettingsRepository` | spec §6 requires Keystore-encrypted storage, which DataStore Preferences cannot provide. Keeping it out avoids plaintext-on-disk in the interim and a half-migrated token file on every upgrade. T1.3 owns `TokenStore`. |
+| 2026-09-30 | `HomeViewModel` takes **no** dependencies; `hasBotToken` is hard-coded `false` | There is no signal to read yet. Deriving it from an unrelated preference would make the skeleton lie about app state and hand the assumption to T1.2/T1.3. |
+| 2026-09-30 | Add `junit-vintage-engine` + `isFailOnNoMatchingTests` | Without them, JUnit 4 tests are silently skipped and the build reports success. Measured: 16 tests vs 9. |
+| 2026-09-30 | CI asserts the build needs no env vars | A documented project property worth testing; the next person to add an env-var dependency would otherwise never notice. |
 
 ## 8. Pinned versions
-_Fill in as tasks pin them._ AGP: **9.4.1** · Gradle: **9.8.0** · Kotlin: **2.4.20** · KSP: **2.3.12** · Compose BOM: **2026.09.00** (material3 1.4.0) · JUnit: **6.1.3** · Room: **2.8.5** · Hilt: **2.60.1** · libwebp tag: — · lottie-android: 6.7.1 · Coil: 3.6.3 · WorkManager: 2.12.0 · Navigation: 2.10.2 · OkHttp: 5.5.0 · kotlinx.serialization: 1.11.0 · coroutines: 1.11.0
+_Fill in as tasks pin them._ AGP: **9.4.1** · Gradle: **9.8.0** · Kotlin: **2.4.20** · KSP: **2.3.12** · Compose BOM: **2026.09.00** (material3 1.4.0) · JUnit: **6.1.3** + **vintage 6.1.3** · Room: **2.8.5** (plugin `androidx.room`) · Hilt: **2.60.1** · androidx.hilt: 1.4.0 · DataStore: 1.2.1 · libwebp tag: — · lottie-android: 6.7.1 · Coil: 3.6.3 · WorkManager: 2.12.0 · Navigation: 2.10.2 · OkHttp: 5.5.0 · kotlinx.serialization: 1.11.0 · coroutines: 1.11.0 · androidx.test.runner: 1.7.0 · Robolectric: 4.17
+
+**Verified working together** (T0.4/T0.5): KSP 2.3.12 + Kotlin 2.4.20 + Hilt 2.60.1 + Room 2.8.5 + Compose BOM 2026.09.00 + Navigation 2.10.2 + JUnit 6.1.3 + Robolectric 4.17, under AGP 9 built-in Kotlin on Gradle 9.8.
 compileSdk: **37.2** (Android 17.2) · targetSdk: **36** (Play minimum since 2026-08-31) · minSdk: **26** · NDK: **28.2.13676358** (r28c) · buildTools: **37.0.0** · JDK: **21**
 
 ## 9. Session log
@@ -1700,3 +1904,6 @@ compileSdk: **37.2** (Android 17.2) · targetSdk: **36** (Play minimum since 202
 |---|---|---|---|---|
 | 1 | 2026-09-29 | **T0.1** | ✅ Project skeleton: AGP 9.4.1 + Gradle 9.8.0 + Kotlin 2.4.20, `:app` + `:native-webp`, `app.stickerport`, minSdk 26 / target 36 / compile 37.2. `assembleDebug`, `assembleRelease` (R8), `test`, `lint` all green. Toolchain installed from scratch (mise JDK 21, user-local Android SDK, NDK r28c, API 26 AVD). Also fixed the plan.md/spec.md naming mix-up. | T0.2 |
 | 2 | 2026-09-29 | **T0.2** | ✅ Material 3 theme (`ui/theme/Color.kt`, `Type.kt`, `Shape.kt`, `Theme.kt`), `enableEdgeToEdge()` + `Scaffold` in `ui/components/AppShell.kt`, predictive back in the manifest, 3 `@Preview`s. Dynamic colour proven by pixel sample (`#FAF9FF` on API 36); brand fallback proven on API 26 (`#F2F4F3` light / `#101413` dark). Light + dark on two targets, 0 crashes, 0 lint errors. Release APK 65 KB → 801 KB with Compose. | T0.3 |
+| 3 | 2026-09-29 | **T0.3** | ✅ Type-safe navigation: 8 `@Serializable` routes, `NavHost`, top bar derived via `hasRoute<T>()`, one package per §7.2. 9 instrumented tests; all 8 routes also verified by hand on the API 36 phone. | T0.4 |
+| 4 | 2026-09-29/30 | **T0.4** | ✅ Hilt + Room + DataStore. **Closed the KSP 2.3.12 + Kotlin 2.4.20 + Hilt 2.60.1 risk.** 3 entities per §11, schema v1 exported and checked, migration policy documented. 21 instrumented + 9 unit tests. Hilt needed a `HiltTestRunner`, not the documented manifest fix. | T0.5 |
+| 5 | 2026-09-30 | **T0.5** | ✅ CI workflow + Robolectric as the last unproven test library. **Found a silent-failure mode: `useJUnitPlatform()` skips all JUnit 4 tests while the build stays green** (16 tests vs 9). Fixed with the Vintage engine. 🎉 **Sprint 0 gate met.** | T1.1 |

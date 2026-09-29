@@ -53,10 +53,26 @@ Then:
 adb shell am start -n app.stickerport/.MainActivity
 ```
 
-You should see the app title, a one-line description, and — on Android 12+ — a colour scheme
-derived from your wallpaper (Material You), with a brand fallback on older releases. Everything
-sits clear of the status bar and navigation bar. This is still a placeholder body; the real Home
-screen arrives in T4.1 and navigation in T0.3.
+You should see the app title, a bot-token banner, a disabled paste field, a Library button, and a
+temporary `SKELETON` row of chips that navigate to every route. Colours come from your wallpaper on
+Android 12+ (Material You) with a teal brand fallback below that. Everything sits clear of the status
+and navigation bars. The real Home screen arrives in T4.1.
+
+## Navigation
+
+Tapping a skeleton chip opens that route with sample arguments, which is how you check that a
+destination receives what it expects. The chips are temporary and disappear with T4.1.
+
+## Tests
+
+```bash
+./gradlew test                          # 16 JVM unit tests (JUnit 5, Kotest, MockK, Turbine, Robolectric)
+ANDROID_SERIAL=19eb9d18 \
+  ./gradlew connectedDebugAndroidTest   # 21 instrumented tests — needs a device
+```
+
+Before an instrumented run on a physical device, disable the screen timeout and uninstall the app —
+see `plan.md` §0. Both suites are cheap; run them before claiming a task is done.
 
 ## Test on a real phone
 
