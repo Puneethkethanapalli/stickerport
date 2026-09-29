@@ -53,6 +53,9 @@ compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
+# TestNavHostController: a NavController that registers the Compose navigator providers, so a
+# graph can be built and inspected in a plain JVM test without composing anything.
+androidx-navigation-testing = { module = "androidx.navigation:navigation-testing", version.ref = "navigationCompose" }
 
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-android-compiler", version.ref = "hilt" }
@@ -85,6 +88,8 @@ kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-t
 junit5 = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit5" }
 # Must track the JUnit 5 version: Gradle's launcher and the engine have to agree.
 junitPlatform = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit5" }
+# Runs JUnit 4 tests (Robolectric, Compose UI rules) on the JUnit Platform alongside Jupiter.
+junit-vintage-engine = { module = "org.junit.vintage:junit-vintage-engine", version.ref = "junit5" }
 junit4 = { module = "junit:junit", version.ref = "junit4" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }

@@ -70,6 +70,15 @@ android {
         compose = true
     }
 
+    testOptions {
+        unitTests {
+            // Robolectric needs the merged resources and manifest, which AGP does not hand to a
+            // plain JVM `test` task unless asked. Without this, any `@Config`-annotated test fails
+            // with "No such manifest file" or cannot resolve a resource.
+            isIncludeAndroidResources = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -160,23 +169,70 @@ dependencies {
     // ---- JVM unit tests (T0.4/T0.5) ----
     //
     // JUnit 5 needs BOTH `useJUnitPlatform()` below and a `junit-platform-launcher` on the
-    // *runtime* classpath. Missing the launcher is the single most common JUnit-5-on-Gradle
-    // failure: the tests are simply not discovered and Gradle reports success.
+    // *runtime* classpath. Missing the launcher is a common JUnit-5-on-Gradle failure: the tests
+    // are not discovered and Gradle reports success.
     testImplementation(libs.junit5)
     testRuntimeOnly(libs.junitPlatform)
+
+    // The JUnit **Vintage** engine runs JUnit 4 tests on the JUnit Platform.
+    //
+    // `useJUnitPlatform()` does NOT run JUnit 4 tests by itself — the platform launcher it installs
+    // only knows the Jupiter engine. Every `@RunWith(AndroidJUnit4::class)` test is therefore
+    // silently *not discovered*, and because "zero tests" is not a failure, the build still goes
+    // **green**. Measured directly: 16 unit tests with this line, 9 without it. The 7 missing are
+    // every Robolectric and Compose-UI-rule test.
+    //
+    // This is the single most dangerous line in the build file, because its absence fails silently
+    // and in the direction that looks like success.
+    testRuntimeOnly(libs.junit.vintage.engine)
     testImplementation(libs.kotest.assertions.core)
     testImplementation(libs.turbine)
     testImplementation(libs.mockk)
     testImplementation(libs.robolectric)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.androidx.navigation.testing)
+    // Robolectric runs the real Android framework on the JVM, so its tests need androidx.test for
+    // `AndroidJUnit4` and `ApplicationProvider` — and an instrumentation-style *runner* even
+    // though nothing is instrumented.
+    testImplementation(libs.androidx.test.junit)
+    testImplementation(libs.androidx.test.core)
+
+    // Compose UI test rule, on the *JVM* side. `androidTest` already has these, but a
+    // `testImplementation` scope is separate — Robolectric tests need their own copy.
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.junit4)
 }
 
 tasks.withType<Test>().configureEach {
     // JUnit 5 on Gradle 9: opt the test task into the JUnit Platform.
     useJUnitPlatform()
-    // Fail on a skipped/ignored test rather than reporting a green build with holes in it.
+
+    // Robolectric runs a real Android runtime per `@Config(sdk = …)`, which needs more than the
+    // 512 MB default heap once several SDK levels are involved.
+    maxHeapSize = "2g"
+
     testLogging {
         events("passed", "skipped", "failed")
         showStandardStreams = false
     }
+
+    // A "green" test task that ran nothing is the failure mode this whole file is about (see the
+    // Vintage-engine comment). Gradle's own answer to it is to fail when no tests are found, so a
+    // deleted or undiscoverable test class stops looking like a passing build.
+    if (name.contains("UnitTest")) {
+        filter {
+            isFailOnNoMatchingTests = true
+        }
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    // Robolectric needs the merged resources and manifest, which AGP does not hand to a plain JVM
+    // `test` task unless asked. `isIncludeAndroidResources` under `testOptions` is the declarative
+    // way to say this, but it is set there because it is what the AGP DSL documents; setting it via
+    // the task inputs here would be a second, invisible source of truth.
+    //
+    // Robolectric also runs a real Android runtime per `@Config(sdk = …)`, which needs more than
+    // the 512 MB default heap once several SDK levels are involved.
+    maxHeapSize = "2g"
 }
