@@ -2,16 +2,15 @@ package app.stickerport.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import app.stickerport.ui.screens.home.HomeScreen
-import app.stickerport.ui.screens.home.HomeUiState
+import app.stickerport.ui.screens.home.HomeViewModel
 import app.stickerport.ui.screens.home.SkeletonRoute
 import app.stickerport.ui.screens.library.LibraryScreen
 import app.stickerport.ui.screens.library.LibraryUiState
@@ -60,18 +59,16 @@ fun StickerportNavHost(
         // ---- Root ----
 
         composable<Home> {
-            // rememberSaveable, not a ViewModel: see the note above.
-            var linkText by rememberSaveable { mutableStateOf("") }
+            // Scoped to this NavBackStackEntry, so it survives configuration changes and is
+            // cleared when Home is popped. First real `hiltViewModel()` call in the app, and the
+            // one that proves the Hilt + Navigation bridge is wired.
+            val viewModel: HomeViewModel = hiltViewModel()
+            val state by viewModel.uiState.collectAsStateWithLifecycle()
 
             HomeScreen(
-                state = HomeUiState(
-                    linkText = linkText,
-                    // No Room yet (T0.4), so there is nothing real to show here.
-                    recents = emptyList(),
-                    hasBotToken = false,
-                ),
-                onLinkTextChange = { linkText = it },
-                // T1.1 owns the §8.1 parser; T0.3 hands the raw text through after a naive
+                state = state,
+                onLinkTextChange = viewModel::onLinkTextChange,
+                // T1.1 owns the §8.1 parser; T0.4 hands the raw text through after a naive
                 // last-segment strip, which is enough to prove arguments reach the destination.
                 onSubmitLink = { raw ->
                     navController.navigate(Preview(setName = raw.substringAfterLast('/')))

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Hilt's test application substitution.
+
+    `@HiltAndroidTest` refuses to run against a `@HiltAndroidApp` Application, and it does **not**
+    pick `HiltTestApplication` for you automatically: without this file every `@HiltAndroidTest`
+    fails at rule construction with
+
+        cannot use a @HiltAndroidApp application but found app.stickerport.StickerportApplication
+
+    `@CustomTestApplication(HiltTestApplication::class)` is not the fix — `HiltTestApplication` is
+    `final`, so the generated subclass does not compile. Declaring it here is the supported path.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:name="dagger.hilt.android.testing.HiltTestApplication" />
+</manifest>

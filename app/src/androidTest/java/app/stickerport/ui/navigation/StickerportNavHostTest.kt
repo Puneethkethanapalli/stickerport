@@ -1,15 +1,17 @@
 package app.stickerport.ui.navigation
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import app.stickerport.ui.components.StickerportApp
+import app.stickerport.MainActivity
+import dagger.hilt.android.testing.HiltAndroidRule
+import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,21 +23,58 @@ import org.junit.runner.RunWith
  * `toRoute<T>()` that returns defaults, an argument that silently arrives empty. So each test
  * asserts on the *rendered argument text*, not merely "no exception was thrown".
  *
- * `StickerportApp` owns a single `Scaffold`, so `Scaffold` does not need a `Scaffold` test tag here
- * and the screen content is reachable directly.
+ * ## Why `createAndroidComposeRule<MainActivity>` and not `createComposeRule()`
+ * T0.4 gave Home a `hiltViewModel()`. A ViewModel factory resolves the Hilt component from the
+ * hosting Activity, and the bare `ComponentActivity` that `createComposeRule()` spins up is not
+ * `@AndroidEntryPoint`, so it implements neither `GeneratedComponent` nor
+ * `GeneratedComponentManager` and every test fails with:
+ *
+ *     Given component holder class androidx.activity.ComponentActivity does not implement
+ *     interface dagger.hilt.internal.GeneratedComponent
+ *
+ * Hosting the **real** `MainActivity` fixes that and is the more honest test anyway: it exercises
+ * the same Activity a user gets, `@AndroidEntryPoint` and all.
+ *
+ * The `HiltAndroidRule` must run **before** the Activity launches (`@get:Rule(order = 0)`), or the
+ * component does not exist yet and the failure reads "The component was not created. Check that you
+ * have added the HiltAndroidRule."
  */
+@HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
 class StickerportNavHostTest {
 
-    @get:Rule
-    val composeRule = createComposeRule()
+    @get:Rule(order = 0)
+    val hiltRule = HiltAndroidRule(this)
 
-    private lateinit var navController: NavHostController
+    @get:Rule(order = 1)
+    val composeRule = createAndroidComposeRule<MainActivity>()
+
+    /**
+     * The real Activity's controller.
+     *
+     * No `setContent` here: `MainActivity.onCreate` has already set the content, and calling
+     * `setContent` again throws "MainActivity has already set content". Creating the controller
+     * inline in the test and passing it to `StickerportApp` is not an option for the same reason —
+     * there is no second place to install content.
+     */
+    /**
+     * The real Activity's controller, or a clear failure.
+     *
+     * It is nullable because composition has not necessarily run when the rule hands the test its
+     * Activity, so `waitUntil` is used to wait for it rather than reading it and force-unwrapping.
+     */
+    private val navController: NavHostController
+        get() = requireNotNull(composeRule.activity.navController) {
+            "MainActivity has not composed yet; wait for navController before navigating"
+        }
+
+    @Before
+    fun inject() = hiltRule.inject()
 
     private fun launchApp() {
-        composeRule.setContent {
-            StickerportApp(navController = rememberNavController().also { navController = it })
-        }
+        // The Activity is already composed and showing Home; just wait for the controller and let
+        // the first frame settle.
+        composeRule.waitUntil { composeRule.activity.navController != null }
         composeRule.waitForIdle()
     }
 

@@ -6,6 +6,15 @@ plugins {
     // Type-safe navigation routes (T0.3) are @Serializable classes, so the routes *are* the
     // arguments and no string route templates exist anywhere in the app.
     alias(libs.plugins.kotlin.serialization)
+    // KSP replaces kapt: AGP 9's built-in Kotlin is incompatible with kapt, and both Room and
+    // Hilt ship first-class KSP processors. This is the first task that exercises
+    // KSP 2.3.12 + Kotlin 2.4.20 together (logged as an open risk in the plan).
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
+    // Configures `room { schemaDirectory(...) }`; without it, schema export needs a hand-rolled
+    // CommandLineArgumentProvider and the generated schemas are not declared as task outputs, so
+    // incremental and cached builds go wrong.
+    alias(libs.plugins.room)
 }
 
 android {
@@ -32,9 +41,10 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
-        // AGP 9's built-in default, stated explicitly so a future AGP bump cannot silently switch
-        // runners and skip every instrumented test.
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // AGP 9's built-in default is AndroidJUnitRunner, but that runner instantiates the real
+        // `@HiltAndroidApp` application, which makes every `@HiltAndroidTest` fail. HiltTestRunner
+        // (androidTest) substitutes HiltTestApplication — see its KDoc.
+        testInstrumentationRunner = "app.stickerport.HiltTestRunner"
     }
 
     buildTypes {
@@ -66,6 +76,17 @@ android {
     }
 }
 
+/**
+ * Room schema export (spec §11 requires the schema to be reviewable in version control).
+ *
+ * Every schema version is committed under `app/schemas/`, which is what makes a migration
+ * testable later. The task step "first migration strategy noted" refers to the decision recorded
+ * in `StickerportDatabase`'s KDoc, not to a configuration here.
+ */
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
 dependencies {
     // The Compose BOM pins every androidx.compose.* artifact to one compatible set. Individual
     // Compose libraries must NOT carry their own version.
@@ -77,9 +98,13 @@ dependencies {
     add("implementation", composeBom)
     add("androidTestImplementation", composeBom)
     add("debugImplementation", composeBom)
+    add("testImplementation", composeBom)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    // hiltViewModel() + collectAsStateWithLifecycle for the Compose + Hilt bridge.
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.hilt.navigation.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
@@ -92,6 +117,19 @@ dependencies {
     // the classpath, not just the compiler plugin.
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
+
+    // Hilt (T0.4). `hilt-android` only; the compiler runs via KSP, not kapt.
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+
+    // Room (T0.4).
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
+    // DataStore (T0.4) for app settings. The bot token is deliberately not here — see
+    // SettingsRepository's KDoc.
+    implementation(libs.datastore.preferences)
 
     // ui-tooling gives the live-preview / inspector; debug only, and it must not ship in release.
     debugImplementation(libs.compose.ui.tooling)
@@ -107,5 +145,38 @@ dependencies {
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.core)
+    // HiltTestRunner's superclass. Not pulled in transitively by the Hilt testing artifact.
+    androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.junit4)
+
+    // Room's in-memory database helper, used by the T0.4 instrumented test.
+    androidTestImplementation(libs.room.testing)
+
+    // Hilt's test harness. Needs its own KSP pass over the test sources, otherwise
+    // `@HiltAndroidTest` classes have no generated base to extend.
+    androidTestImplementation(libs.hilt.testing)
+    kspAndroidTest(libs.hilt.compiler)
+
+    // ---- JVM unit tests (T0.4/T0.5) ----
+    //
+    // JUnit 5 needs BOTH `useJUnitPlatform()` below and a `junit-platform-launcher` on the
+    // *runtime* classpath. Missing the launcher is the single most common JUnit-5-on-Gradle
+    // failure: the tests are simply not discovered and Gradle reports success.
+    testImplementation(libs.junit5)
+    testRuntimeOnly(libs.junitPlatform)
+    testImplementation(libs.kotest.assertions.core)
+    testImplementation(libs.turbine)
+    testImplementation(libs.mockk)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.kotlinx.coroutines.test)
+}
+
+tasks.withType<Test>().configureEach {
+    // JUnit 5 on Gradle 9: opt the test task into the JUnit Platform.
+    useJUnitPlatform()
+    // Fail on a skipped/ignored test rather than reporting a green build with holes in it.
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = false
+    }
 }
