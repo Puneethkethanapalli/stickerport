@@ -1,101 +1,84 @@
 package app.stickerport.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
-import app.stickerport.ui.theme.StickerportTheme
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import app.stickerport.ui.navigation.BackIcon
+import app.stickerport.ui.navigation.StickerportNavHost
+import app.stickerport.ui.navigation.topBarSpec
 
 /**
- * The app shell (spec §12: Material 3, edge-to-edge).
+ * The app shell (spec §12: Material 3, edge-to-edge, predictive back).
  *
- * This is a deliberately temporary stand-in for the real thing: T0.3 replaces `content` with a
- * `NavHost` and adds a top bar. What is *not* temporary is the `Scaffold` and the insets handling
- * — every screen will sit inside this, so getting it right once here is the point of T0.2.
+ * This is the **only** [Scaffold] in the app. That is the whole point of T0.2 + T0.3: window insets
+ * and the top bar are handled in exactly one place, so a new screen cannot get them wrong. Screens
+ * are pure content and never touch `WindowInsets` themselves.
  *
- * `Scaffold` defaults to consuming `WindowInsets.systemBars` for its top and bottom bars, and
- * passes the *remaining* insets to `content` as [PaddingValues]. That is what keeps content clear
- * of the status bar and the gesture-navigation area.
+ * The top bar is derived from the current [NavDestination] (see `topBarSpec`) rather than declared
+ * per screen. That keeps screens stateless — they do not know or care what the bar says.
+ *
+ * Predictive back needs nothing here: `android:enableOnBackInvokedCallback="true"` is in the
+ * manifest (T0.2) and `NavHost` animates the pop itself.
+ *
+ * @param navController injectable so instrumented tests and previews can drive a specific graph or
+ *   deep link. Defaults to a fresh controller, which is what production wants.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppShell(
+fun StickerportApp(
     modifier: Modifier = Modifier,
-    content: @Composable (PaddingValues) -> Unit,
+    navController: NavHostController = rememberNavController(),
 ) {
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val spec = backStackEntry?.destination?.topBarSpec(navController)
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        content = content,
-    )
-}
-
-/**
- * Placeholder body for the Home screen. Replaced in T4.1.
- *
- * Kept dumb on purpose: it is a pure function of its inputs, so it is previewable and screenshot-able
- * without a ViewModel, exactly like the real screens will be.
- */
-@Composable
-fun PlaceholderHome(
-    modifier: Modifier = Modifier,
-    innerPadding: PaddingValues = PaddingValues(0.dp),
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(innerPadding)
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = "Stickerport",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+        topBar = {
+            if (spec != null) {
+                TopAppBar(
+                    title = { Text(spec.title) },
+                    navigationIcon = {
+                        if (spec.showBack) {
+                            IconButton(onClick = { navController.popBackStack() }) {
+                                Icon(BackIcon, contentDescription = "Back")
+                            }
+                        }
+                    },
+                    actions = {
+                        spec.actions.forEach { action ->
+                            IconButton(onClick = action.onClick) {
+                                Icon(action.icon, action.contentDescription)
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        actionIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    ),
+                )
+            }
+        },
+    ) { innerPadding ->
+        StickerportNavHost(
+            navController = navController,
+            modifier = Modifier.padding(innerPadding),
         )
-        Text(
-            text = "Telegram sticker packs, converted for your messenger.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Preview(name = "Light", showBackground = true, widthDp = 360, heightDp = 640)
-@Composable
-private fun AppShellLightPreview() {
-    StickerportTheme(darkTheme = false) {
-        AppShell { inner -> PlaceholderHome(innerPadding = inner) }
-    }
-}
-
-@Preview(name = "Dark", showBackground = true, widthDp = 360, heightDp = 640)
-@Composable
-private fun AppShellDarkPreview() {
-    StickerportTheme(darkTheme = true) {
-        AppShell { inner -> PlaceholderHome(innerPadding = inner) }
-    }
-}
-
-/**
- * Preview of the fallback (non-dynamic) brand palette, which is what Android 11 and below get.
- * Android 12+ previews show the wallpaper-derived scheme instead, so this is the only way to
- * eyeball the fallback without running on an old device.
- */
-@Preview(name = "Brand fallback (no dynamic colour)", showBackground = true, widthDp = 360, heightDp = 640)
-@Composable
-private fun AppShellBrandFallbackPreview() {
-    StickerportTheme(darkTheme = false, dynamicColor = false) {
-        AppShell { inner -> PlaceholderHome(innerPadding = inner) }
     }
 }

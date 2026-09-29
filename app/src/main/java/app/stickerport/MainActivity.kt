@@ -4,12 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import app.stickerport.ui.components.AppShell
-import app.stickerport.ui.components.PlaceholderHome
-import app.stickerport.ui.theme.StickerportTheme
+import app.stickerport.ui.components.StickerportApp
 
 /**
- * The single activity. T0.2 gives it edge-to-edge and the theme; T0.3 adds the `NavHost`.
+ * The single activity. T0.2 gave it edge-to-edge and the theme; T0.3 gave it the navigation graph.
  *
  * It is a plain [ComponentActivity], not an AppCompat one: the UI is entirely Compose, and with
  * `enableEdgeToEdge()` there are no platform widgets to theme, so AppCompat would only add
@@ -25,11 +23,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            StickerportTheme {
-                AppShell { innerPadding ->
-                    PlaceholderHome(innerPadding = innerPadding)
-                }
-            }
+            StickerportApp()
         }
     }
 }

@@ -3,6 +3,9 @@ plugins {
     // Required for @Composable. Must be applied even though AGP 9 has built-in Kotlin —
     // built-in Kotlin compiles the code; the Compose plugin supplies the Compose compiler.
     alias(libs.plugins.kotlin.compose)
+    // Type-safe navigation routes (T0.3) are @Serializable classes, so the routes *are* the
+    // arguments and no string route templates exist anywhere in the app.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -28,6 +31,10 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+
+        // AGP 9's built-in default, stated explicitly so a future AGP bump cannot silently switch
+        // runners and skip every instrumented test.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -62,8 +69,14 @@ android {
 dependencies {
     // The Compose BOM pins every androidx.compose.* artifact to one compatible set. Individual
     // Compose libraries must NOT carry their own version.
+    //
+    // The BOM must be added to *every* configuration that resolves a Compose artifact, not just
+    // `implementation` — androidTest and debug have their own classpaths and will fail with
+    // "Could not find androidx.compose.ui:ui-test-junit4:." (an empty version) otherwise.
     val composeBom = platform(libs.compose.bom)
-    implementation(composeBom)
+    add("implementation", composeBom)
+    add("androidTestImplementation", composeBom)
+    add("debugImplementation", composeBom)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -72,7 +85,27 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
+    // material3 does not bring the Icons set with it; the top bar needs it.
+    implementation(libs.compose.material.icons.core)
+
+    // Navigation (T0.3). The type-safe route API in this version needs kotlinx-serialization on
+    // the classpath, not just the compiler plugin.
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.kotlinx.serialization.json)
 
     // ui-tooling gives the live-preview / inspector; debug only, and it must not ship in release.
     debugImplementation(libs.compose.ui.tooling)
+
+    // Compose UI tests (T0.3 "How to test"). `ui-test-manifest` is what lets `createComposeRule`
+    // find an Activity; debug-only, and it is deprecated in favour of using the real
+    // ComponentActivity, so it is scoped to test builds only.
+    debugImplementation(libs.compose.ui.test.manifest)
+
+    // ---- Instrumented tests (T0.3 onwards) ----
+    // The device/emulator side. Uses JUnit4 because that is what the Android instrumentation
+    // runner speaks; the JUnit5 setup in T0.5 is for the *unit* (JVM) side only.
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.junit4)
 }

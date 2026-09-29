@@ -42,6 +42,10 @@ compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
+# NOT pulled in transitively by material3, but `androidx.compose.material.icons.Icons` lives here.
+# Only the core set (~30 icons) — the full `material-icons-extended` is several MB and is not
+# worth it; T4.x should use its own small vector assets for anything outside the core set.
+compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
 compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 
