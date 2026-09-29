@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12+ (API 31) backup rules.
+
+    Stickerport backs up nothing. Concretely:
+
+      * The encrypted bot token (DataStore) must never leave the device — spec §15, NFR-5. T1.3
+        adds an explicit <exclude> for its file as soon as the path is concrete; the blanket
+        <exclude domain="root"/> below already covers it in the meantime.
+      * Converted sticker packs are large, fully re-derivable by re-importing the Telegram link,
+        and are tied to the device's own WhatsApp install. Restoring them onto a new device would
+        produce packs the provider can serve but that the user may not want.
+      * Room rows without their files are worse than no rows, so a partial restore is avoided by
+        excluding everything rather than excluding "just the files".
+
+    `android:allowBackup="false"` is also set in the manifest; this file is the Android 12+ mechanism
+    that actually governs behaviour, because allowBackup alone has documented caveats there.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>

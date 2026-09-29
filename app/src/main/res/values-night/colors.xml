@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark counterpart of values/colors.xml `window_background`, matching StickerportTheme's
+         dark `background`. Selected automatically by the system in night mode. -->
+    <color name="window_background">#101413</color>
+</resources>

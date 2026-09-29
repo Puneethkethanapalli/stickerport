@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup rules for Android 11 (API 30) and below, which predate `dataExtractionRules`.
+    On those versions `android:fullBackupContent` is the mechanism, so both files are needed to
+    express the same "back up nothing" policy across the whole minSdk 26 range.
+
+    Rationale for excluding everything is in xml/data_extraction_rules.xml.
+-->
+<full-backup-content>
+    <exclude
+        domain="root"
+        path="." />
+</full-backup-content>

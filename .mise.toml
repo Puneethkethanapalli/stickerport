@@ -1,0 +1,5 @@
+# Local toolchain pin for mise (https://mise.jdx.dev).
+# AGP 9 requires JDK 17+; 21 is what this project is developed and built against.
+# Ignored by the Gradle build itself — Gradle just reads JAVA_HOME / the toolchain.
+[tools]
+java = "21"

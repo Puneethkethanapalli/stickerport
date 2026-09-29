@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The window theme. All real theming happens in Compose (`StickerportTheme`); this exists only
+        for the window background and the pre-Compose first frame, so launching does not flash a
+        wrong colour.
+
+        It is a platform theme, not AppCompat: the UI is 100% Compose, so there is no AppCompat
+        widget to map.
+
+        `android:enforceStatusBarContrast` / `android:enforceNavigationBarContrast` are deliberately
+        absent. They need API 29 (`minSdk` is 26, so they would have to live in a `values-v29/`
+        folder), and they are redundant: `enableEdgeToEdge()` already sets the system-bar scrim and
+        icon-colour policy for the whole app. See T2 notes — the scrim behaviour is verified
+        visually on API 26 and API 36.
+    -->
+    <style name="Theme.Stickerport" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

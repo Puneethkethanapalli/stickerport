@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        Backups are off. The bot token must never leave the device (spec §15) and every pack is
+        re-derivable by re-importing the Telegram link, so there is nothing worth restoring.
+        `dataExtractionRules` is the Android 12+ mechanism that actually governs this;
+        `allowBackup` alone has documented caveats there. T1.3 narrows the rules with an explicit
+        <exclude> for the token file once the DataStore path is concrete.
+    -->
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Stickerport">
+
+        <!--
+            Launcher activity. The name and the applicationId must never contain "WhatsApp"
+            (brand guidelines, spec §19). Real intent filters for the Telegram share sheet and
+            the t.me deep link are added in T5.2.
+
+            `android:enableOnBackInvokedCallback="true"` opts in to the predictive back gesture
+            (spec §12). It is default-on from targetSdk 36, but it is stated explicitly so the
+            intent survives a future targetSdk experiment. T0.3 wires the actual back behaviour
+            once there is a NavHost to pop; until then the system default (finish the activity)
+            is correct.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:enableOnBackInvokedCallback="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
